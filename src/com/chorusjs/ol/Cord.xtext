@@ -1,0 +1,740 @@
+grammar com.chorusjs.ol.Cord with org.eclipse.xtext.common.Terminals
+
+generate cord "http://www.chorusjs.com/ol/Cord"
+
+import 'http://www.eclipse.org/emf/2002/Ecore' as ecore
+
+Model:
+  (elements += AbstractElement)*
+;
+
+
+//******************************************************************************
+// Data Types
+//
+//******************************************************************************
+	
+
+terminal INT returns ecore::EInt:('0'..'9')+ ; 
+
+FLOAT returns ecore::EString : '-'? INT ('.' INT)? ;
+
+POSINTNUMBER returns ecore::EString  : INT  ;
+
+NEGINTNUMBER returns ecore::EString  : '-' INT ;
+
+INTNUMBER :  POSINTNUMBER | NEGINTNUMBER ;
+
+NATIVE:
+	STRING | FLOAT
+; 
+
+JSONAttribute:
+	JSONAttributeNative | JSONAttributeArray | JSONAttributeMap 
+;
+
+JSONAttributeNative: 
+	name=ID ':' value=NATIVE
+;
+
+JSONAttributeMap: 
+	name=ID ('as' attributeType=[Entity])? ':' value=JSONMap
+;
+
+JSONAttributeArray: 
+	name=ID ':' value=JSONArray
+;
+
+JSONArray:
+	'[' values+=JSONType (',' values+=JSONType)* ']'
+;
+
+JSONMap:
+	'{' attributes+=JSONAttribute (',' attributes+=JSONAttribute)* '}'
+;
+
+JSONType:
+	JSONAttribute | JSONArray | JSONMap
+;
+
+JSON:
+	'const' name=ID data=JSONType
+;
+
+
+//enum NativeTypes:
+//	bit | int | float | string | date | time | timestamp | uri | blob | guid | reference | currency
+//;
+
+//******************************************************************************
+
+
+AbstractElement:
+  PackageDeclaration | Type | Import | Include
+;
+
+//NativeType:
+//	type=NativeTypes 
+//;
+
+FeatureType:
+	Entity | DataType | Association | Variant | Projection | Enum | JSON //| NativeType
+;
+
+MessageType:
+	Entity | Projection
+;
+
+Type:
+  Entity | DataType | Association | Variant | Enum | Service | Message | Binding | Operation | Projection | Environment | Server | Process | JSON
+;
+  
+
+QualifiedName:
+  ID ('.' ID)*
+;
+
+QualifiedNameWithWildcard:
+  QualifiedName '.*'?
+;
+ 
+
+Include:
+	
+	'include' importURI=STRING
+;
+ 
+Import:
+	'import' importedNamespace = QualifiedNameWithWildcard
+; 
+
+PackageDeclaration:
+	'package' name=ID '{'
+    
+  		(elements += AbstractElement)*
+	
+	'}'
+; 
+
+
+EntityAlteration:
+	TypeAlteration | MinusAlteration 
+;
+ 
+EntityVersion:
+	'version' major=POSINTNUMBER '.' minor=POSINTNUMBER '{'
+   	 	('##' description=STRING)?
+   	 	(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+   	 	
+		(isReset?='reset')? //start fresh
+		
+		(alterations+=EntityAlteration)*	
+		
+        features+=Feature*
+		
+	'}'
+; 
+ 
+Entity:
+    'entity' name=ID '{'
+ 		('##' description=STRING)?
+ 		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+ 		
+        features+=Feature*
+        (entityVersions+=EntityVersion)*
+    '}'
+;
+
+TypeAlteration:
+	'alter' feature=[Feature] '{'
+ 		('##' description=STRING)?
+		('min' minoccur=POSINTNUMBER)?
+		('max' maxoccur=POSINTNUMBER)?
+		('cast' featureType=[DataType])?
+	'}'
+;
+
+PlusAlteration:
+		'+' pluses=Feature '{' '}'
+;
+
+MinusAlteration:
+		'-' minuses=[Feature]
+;
+
+Alteration:
+	TypeAlteration | MinusAlteration | Feature
+;
+
+Projection:
+	'projection'  name=ID '[' entity=[Entity | QualifiedName] ('(' major=POSINTNUMBER '.' minor=POSINTNUMBER ')' )? ']' '{'
+   	 	('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		
+		(alterations+=Alteration)+	
+				
+	'}'
+;
+ 
+Feature:
+   name = ID ':' ftype += [FeatureType | QualifiedName] ('|' ftype += [FeatureType | QualifiedName] )* (multiplicity=Multiplicity)? ('{'
+   	 		('##' description=STRING)?
+   	 		('default' default=STRING)?
+   '}')?
+;
+
+EnumID:
+	value=ID
+;
+
+EnumINT:
+	value=POSINTNUMBER
+;
+
+EnumValue:
+	EnumID | EnumINT
+;
+
+Enum:
+	'enum' name=ID ':' type = [DataType | QualifiedName] '{'
+		('##' description=STRING)?
+	
+		values+=EnumValue (',' values+=EnumValue)*
+	'}'
+; 
+ 
+DataType:
+    'native' name=ID ('{'
+    	('##' description=STRING)?
+    	
+    	'}'
+    )?
+;
+
+enum Operator:
+	
+	lessThan='<' | equal='=' | lessThanOrEqual='<=' | greaterThan='>' | greaterThanOrEqual='>='
+	
+;
+
+Variant:
+	'variant' name=ID ':' type=[Type | QualifiedName] ('{'
+    	('##' description=STRING)?
+		('length' operator=Operator value=INT)?
+	'}')?
+;
+
+enum Multiplicity:
+	one2any='*' | one2many='+'  | many2many ='#' | one2one='?' 
+;
+
+ 
+Association: 
+	'association' name=ID  '{' 
+		('##' description=STRING)?
+		'(' entity1=[Entity] '-' entity2=[Entity] (multiplicity?=Multiplicity)?  ('-' entity3=[Entity] (multiplicity2?=Multiplicity)? )? ')'  
+			features+=Feature*
+	'}' 
+;
+
+//******************************************************************************
+// Service Definition
+//
+//******************************************************************************
+
+Header:
+	
+	(isEncoded?='encoded')? 'message' message=[Message] '->' 'part' part=ID
+;
+
+OperationBinding:
+
+	'operation' operationname=[Operation] (isRpc?='rpc')? '{'
+		('##' description=STRING)?
+		(('action')? soapAction=STRING)?
+		'request' requestparts=ID (isEncoded?='encoded')? ('{'
+			(headers+=Header)+
+			'}')?
+		('response' responseparts=ID (respIsEncoded?='encoded')?)?
+		('throws' faultname+=ID)* //use and name can be inferred?
+	'}'
+	
+;
+
+DefaultBinding:
+	'default' '{'
+		('##' description=STRING)?
+		'request' requestparts=ID (isEncoded?='encoded')? ('{'
+			(headers+=Header)+
+			'}')?
+		('response' responseparts=ID (respIsEncoded?='encoded')?)?
+		('throws' faultname+=ID)* //use and name can be inferred?	
+	'}'
+;
+
+Binding:
+	'binding' name=ID (isRpc?='rpc')? (isHttp?='HTTP')? (isJms?='JMS')? (isBytes?='bytes')? 
+	'{'
+		('##' description=STRING)?
+		(defaultBinding=DefaultBinding)?
+		(operationBindings+=OperationBinding )*
+	'}'
+;
+
+
+Port:
+		'port' name=ID '{'
+			('##' description=STRING)?
+			('binding' binding=[Binding])?
+			('server' servername=ID)?
+			('port' serverport=POSINTNUMBER)?
+			'address' address=STRING
+		'}'
+	
+;
+
+enum Stage:
+	identified | specified | deployed | deprecated | retired
+;
+
+ServiceVersion:
+	
+	'version' majorversion=POSINTNUMBER '.' minorversion=POSINTNUMBER '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		(stage+=Stage)?
+		interface=PortType 
+		(ports+=Port)+
+
+		(variants+=ServiceVariant)*	
+	'}'
+;
+
+
+//A service variant is used to support specific consumers. 
+ServiceVariant:
+	'variant' name=ID '{'
+		('##' description=STRING)?
+		interface=PortType 
+		(ports+=Port)+
+	'}'
+;
+
+Service:
+	'service' name=ID  '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		
+		versions+=ServiceVersion+
+	'}'
+;
+
+enum OperationType:
+	operation | reference
+;
+
+TestCase:
+	'case' name=ID ':' inputCase=[JSON] ('->' outputCase=[JSON])? ('throw' faultCase=[JSON])?
+;
+
+
+enum HTTPVerb:
+	GET | POST | PUT | DELETE | HEAD 
+;
+
+Operation:
+	operation=OperationType (output=[Message])? name=ID '('
+		input=[Message] 
+		')' ('throws' faults+=[Message] (',' faults+=[Message])*)?
+		('{'	('##' description=STRING)?
+				(issues+=Issue)*
+				('assumption' assumptions+=STRING)*
+				(verb=HTTPVerb)?
+				('\'\''code=STRING '\'\'')?
+				(testCases+=TestCase)*
+		'}')?
+;
+
+PortType:
+	'interface' name=ID '{'
+		
+		('##' description=STRING)?
+		(operations+=[Operation])+
+	
+	'}'
+;
+
+MessagePart:
+	'part' name=ID '->' element=[MessageType | QualifiedName] ('(' major=POSINTNUMBER '.' minor=POSINTNUMBER ')' )?
+	('{'	('##' description=STRING)?
+			(isCompatible?='compatible')?
+		//This is where the entity modifier is defined
+	'}')?
+	
+;
+
+MessageVersion:
+	 'version' majorversion=POSINTNUMBER '.' minorversion=POSINTNUMBER '{'
+		('##' description=STRING)?
+
+		(parts+=MessagePart)+
+	
+	'}'
+;
+
+Message:
+	'message' name=ID '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		(parts+=MessagePart)+
+
+		(versions+=MessageVersion)*
+	
+	'}'
+	
+;
+
+Environment:
+	
+	'environment' name=ID '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		(servers+=Server)*
+		('naming' '<'factory=QualifiedName ',' provider=STRING'>')?
+		('jms' '<'connectionFactory=QualifiedName ',' targetAddress=QualifiedName'>')?
+	'}'
+	
+; 
+
+Event:
+	'event' name=ID '{'
+		'topic' value=[ProcessVariable | QualifiedName] 
+	'}'
+;
+
+ServiceReference:
+	
+	'service' service=[Service] majorversion=POSINTNUMBER'.'minorversion=POSINTNUMBER ('as' name=ID)?
+;
+
+ProcessReference:
+	'process' process=[Process] ('as' name=ID)?
+;
+
+Deployable:
+	ServiceReference | ProcessReference
+;
+
+Bundle:
+	'bundle' name=ID '{'
+			'port' port=POSINTNUMBER
+			deployablerefs+=Deployable*
+			
+		'}'
+;
+
+Server:
+	'server' name=ID '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		servername=ID
+		bundles+=Bundle*
+		
+	'}'
+; 
+
+//******************************************************************************
+// Process Definition
+//
+//******************************************************************************
+
+
+ProcessVariable:
+	'var' (isOpen?='open')? (isFinal?='final')? name=ID ':' mtype=[Type] //('<' part=[MessagePart] ('.'feature=[Feature])? '>')?
+;
+
+
+
+ProcessActivity:
+	Receive | Reply | Assign | Invoke | Sequence | Flow | Pick | Wait | ProcessExit | 
+	ProcessIf | Subprocess | Scope | ProcessThrow | Rethrow | ForEach | Log | DBLookup | Event | Command
+;
+
+HTTPHeader:
+	'header' name=ID (value=STRING)
+;
+
+MongoDB:
+	'mongo' name=ID '{'
+		('##' description=STRING)?
+		'url' url=STRING 
+		'collections' collections+=ID (',' collections+=ID)
+	'}'		
+;
+
+DBLookup:
+	'lookup' name = ID '{'
+		('##' description=STRING)?
+		result=[ProcessVariable] '=' collection=ID '(' queryString=STRING ')'  
+	'}'
+;
+
+Command:
+	'command' name=ID ('('vars+=[ProcessVariable] (',' vars+=[ProcessVariable] ')')*)? '{'
+		code=STRING
+	'}'
+;
+
+Validate:
+	'validate' name=ID '{'
+	
+	'}'
+;
+
+Receive:
+	'receive' name=ID '{'
+		('##' description=STRING)?
+		'->' varRef=[ProcessVariable] 
+		('->' varRefs+=[ProcessVariable])* 
+		(isAsynch?='asynch')?
+	'}'
+;
+
+
+InitVar:
+	'init' jsonData=[JSON] '->' var=[ProcessVariable] // ('.' varPart=[MessagePart])?
+;
+
+FeatureAssignment:
+	
+		fromFeature=[Feature] '->' toFeature=[Feature] ('{'
+			(assignment+=FeatureAssignment)*
+		'}')?
+			
+;
+
+
+Assign:
+	//'assign' name=ID '{'	
+	//	('##' description=STRING)?
+	//	(isValidate?='validate')?
+	//	(vars+=ProcessVariable)*
+		(initVars+=InitVar)*
+	//	(durations+=Duration)*
+		from=[ProcessVariable]  '->' to=[ProcessVariable] ('{'
+			(assignment+=FeatureAssignment)*
+			'}')?
+	//'}'
+;
+
+SetHeader:
+	header=[HTTPHeader] '=' (value=STRING)? (var=ProcessVariable)? (isNull?='null')?
+;
+
+RemoveHeader:
+	'remove' header=[HTTPHeader]
+;
+
+ChangeHeader:
+	SetHeader | RemoveHeader
+;
+
+enum HTTPPart:
+	protocol|host|port|path|query|ref|user|full
+;
+
+enum StringAction:
+	append|prepend|replace|remove|set	
+;
+
+enum URLParts:
+	protocol|host|port|path|query|ref|user|full
+;
+
+URLRewrite:
+	action=StringAction part=URLParts ('with')? (value=STRING)? (var=ProcessVariable)?
+;
+
+Invoke:
+	'invoke' name=ID '{'
+		('##' description=STRING)?
+		(vars+=ProcessVariable)*
+		(changeHeaders+=ChangeHeader)*
+		(urlRewrite+=URLRewrite)*
+		partnerLink=[ServiceReference] '.' operation=[Operation] '(' inputs+=[ProcessVariable] (',' inputs+=[ProcessVariable])* ')' ('->' output+=[ProcessVariable] ('<'fromPart+=[MessagePart]'>')?)*
+	'}'
+;
+
+Reply:
+	'reply' recieveRef=[Receive] '{'
+		('##' description=STRING)?
+		(urlRewrites+=URLRewrite)*
+		'return' (partnerLink=[ServiceReference] '.' operation=[Operation] '(')? output = [ProcessVariable] (close?=')' )?
+	'}'
+;
+
+Sequence:
+	'sequence' name=ID '{'
+		('##' description=STRING)?
+		(vars+=ProcessVariable)*
+		(activities+=ProcessActivity)+
+	'}'
+;
+
+Flow:
+	'flow' name=ID '{'
+		('##' description=STRING)?
+		(vars+=ProcessVariable)*
+		(activities+=ProcessActivity)+
+	'}'
+;
+
+Pick:
+	'pick' name=ID '{'
+		('##' description=STRING)?
+		(vars+=ProcessVariable)*
+		(activities+=Receive)+
+		('timeout' timeout=[Duration])?
+	'}'
+	
+;
+
+Scope:
+	'scope' name=ID '{'
+		('##' description=STRING)?
+		(isIsolated?='isolated')?
+	'}'
+;
+
+ForEach:
+	'foreach' varRef=[ProcessVariable] '{' 
+		('##' description=STRING)?
+		(isSerial?='serialize')?
+		scope=Scope
+	'}'
+;
+
+JoinFailure:
+		isSuppressJoinFailure?='suppressJoinFailure' (isFalse?='no')?
+;
+
+Duration:
+	'duration' name=ID '('
+	(year=POSINTNUMBER 'Y')? (month=POSINTNUMBER 'M')? (day=POSINTNUMBER 'D')? 
+	(hours=POSINTNUMBER 'h')? (minutes=POSINTNUMBER 'm')? (seconds=POSINTNUMBER 's')? ((ms=POSINTNUMBER 'ms')?)
+	')'
+;
+
+WaitValue:
+	ProcessVariable | Duration
+;
+
+Wait:
+	'wait' name=ID '{'
+		('##' description=STRING)?
+		(isSuppressJoinFailure=JoinFailure)?
+		'for' durationVar=[WaitValue]
+	'}'
+;
+
+Subprocess:
+	'process' subprocess=[Process] '{'
+		('##' description=STRING)?
+	'}'
+;
+
+ProcessExit:	
+	'exit' name=ID '{'
+		('##' description=STRING)?
+		(isSuppressJoinFailure=JoinFailure)?
+	
+	'}'
+;
+
+ProcessIf:
+	'if' var=[ProcessVariable] ('.'part=[MessagePart]'.'feature=[Feature])? '=' (value=NATIVE) '{'
+		activity=ProcessActivity
+	'}' ('else' '{'
+		elseActivity=ProcessActivity
+	'}')?
+;
+
+//This is validated not enforced at the type level
+//RootActivity:
+//	Sequence | Flow | Pick
+//;
+
+enum FaultEnum:
+	ambiguousReceive | unsupportedReference // TBC
+;
+
+ProcessThrow:
+	'throw' name=ID var=[ProcessVariable] ('as' faultType=FaultEnum)?
+;
+
+Rethrow:
+	'rethrow' name=ID var=[ProcessVariable] ('as' faultType=FaultEnum)?
+;
+
+Logger:
+	'logger' name=ID '{'
+		('##' description=STRING)?
+		('type' type=LoggerType)?
+		'level' level=LogLevels 
+		('maxSize' size=POSINTNUMBER)?
+		('backups' backups=POSINTNUMBER)?
+	'}'
+;
+
+enum LoggerType:
+	console | file
+;
+
+enum LogLevels:
+	trace | warning | error | debug | info | fatal
+;
+
+enum LogContent:
+	simple | full | headers | custom
+;
+
+Log:
+	'log' name=ID '{' 
+		('##' description=STRING)?
+		(level=LogLevels)? 
+		(content=LogContent)? var=[ProcessVariable] '->' logger=[Logger]
+	'}'
+;
+
+enum ThrottleRate:
+	perday='/day' | perhour='/hr' | pers = '/s' 
+;
+
+Issue: 
+	'issue' issue=STRING ('{'('owner' owner=ID)? ('resolution' resolution=STRING)? '}')?
+;
+Process:
+	'process' name=ID 'version' version=POSINTNUMBER (',' port=POSINTNUMBER)? '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		(isSuppressJoinFailure?='suppressJoinFailure') ?
+		(serviceReferences+=ServiceReference)*
+		(variables+=ProcessVariable)+
+		(loggers+=Logger)*
+		(dbs+=MongoDB)*
+		(headers+=HTTPHeader)*
+		(waitValies+=Duration)*
+		activity=ProcessActivity
+		('throttle' rate=POSINTNUMBER per=ThrottleRate )?
+	'}'
+;
+
