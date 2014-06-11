@@ -16,6 +16,7 @@
  *  specific language governing permissions and limitations
  *  under the License.
  */
+<<<<<<< HEAD
 
 //******************************************************************************
 // History
@@ -23,6 +24,8 @@
 // 06/10/2014  v0.5 | Core definitions for: Data Types, Service, Process 
 //
 //******************************************************************************
+=======
+>>>>>>> 1debbb3548ee64b08a8223e4f408e4433654a183
  
 grammar com.chorusjs.ol.Cord with org.eclipse.xtext.common.Terminals
 
