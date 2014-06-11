@@ -1,3 +1,29 @@
+/*
+ *  Licensed to Convergence Modeling LLC under one or more 
+ *  contributor license agreements.  See the NOTICE file
+ *  distributed with this work for additional information
+ *  regarding copyright ownership.  Convergence Modeling LLC 
+ *  licenses this fileto you under the Apache License, Version 2.0 
+ *  (the "License"); you may not use this file except in compliance
+ *  with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing,
+ *  software distributed under the License is distributed on an
+ *   * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ *  KIND, either express or implied.  See the License for the
+ *  specific language governing permissions and limitations
+ *  under the License.
+ */
+
+//******************************************************************************
+// History
+//
+// 06/10/2014  v0.5 | Core definitions for: Data Types, Service, Process 
+//
+//******************************************************************************
+ 
 grammar com.chorusjs.ol.Cord with org.eclipse.xtext.common.Terminals
 
 generate cord "http://www.chorusjs.com/ol/Cord"
@@ -86,7 +112,7 @@ MessageType:
 ;
 
 Type:
-  Entity | DataType | Association | Variant | Enum | Service | Message | Binding | Operation | Projection | Environment | Server | Process | JSON
+  Entity | DataType | Association | Variant | Enum | Service | Resource | Message | Binding | Operation | Path | Projection | Environment | Server | Process | JSON
 ;
   
 
@@ -126,6 +152,7 @@ EntityVersion:
    	 	('##' description=STRING)?
    	 	(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+   	 	('note' notes+=STRING)*
    	 	
 		(isReset?='reset')? //start fresh
 		
@@ -141,6 +168,7 @@ Entity:
  		('##' description=STRING)?
  		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+ 		('note' notes+=STRING)*
  		
         features+=Feature*
         (entityVersions+=EntityVersion)*
@@ -173,6 +201,7 @@ Projection:
    	 	('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
 		
 		(alterations+=Alteration)+	
 				
@@ -180,7 +209,7 @@ Projection:
 ;
  
 Feature:
-   name = ID ':' ftype += [FeatureType | QualifiedName] ('|' ftype += [FeatureType | QualifiedName] )* (multiplicity=Multiplicity)? ('{'
+   (isIdentity?='identifier')? name = ID ':' ftype += [FeatureType | QualifiedName] ('|' ftype += [FeatureType | QualifiedName] )* (multiplicity=Multiplicity)? ('{'
    	 		('##' description=STRING)?
    	 		('default' default=STRING)?
    '}')?
@@ -254,6 +283,7 @@ OperationBinding:
 
 	'operation' operationname=[Operation] (isRpc?='rpc')? '{'
 		('##' description=STRING)?
+		(verb=HTTPVerb)?
 		(('action')? soapAction=STRING)?
 		'request' requestparts=ID (isEncoded?='encoded')? ('{'
 			(headers+=Header)+
@@ -306,6 +336,8 @@ ServiceVersion:
 		('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
+		
 		(stage+=Stage)?
 		interface=PortType 
 		(ports+=Port)+
@@ -329,10 +361,23 @@ Service:
 		('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
 		
 		versions+=ServiceVersion+
 	'}'
 ;
+
+Resource returns Service :
+	'resource' name=ID  '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
+		
+		versions+=ServiceVersion+
+	'}'
+;
+
 
 enum OperationType:
 	operation | reference
@@ -347,6 +392,19 @@ enum HTTPVerb:
 	GET | POST | PUT | DELETE | HEAD 
 ;
 
+Path:
+	
+	'path' name=STRING '{'
+		('##' description=STRING)?
+		(issues+=Issue)*
+		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
+		
+		(operations+=Operation)+
+		
+	'}'
+;
+
 Operation:
 	operation=OperationType (output=[Message])? name=ID '('
 		input=[Message] 
@@ -354,6 +412,7 @@ Operation:
 		('{'	('##' description=STRING)?
 				(issues+=Issue)*
 				('assumption' assumptions+=STRING)*
+				('note' notes+=STRING)*
 				(verb=HTTPVerb)?
 				('\'\''code=STRING '\'\'')?
 				(testCases+=TestCase)*
@@ -392,6 +451,8 @@ Message:
 		('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
+		('code' httpCode=POSINTNUMBER)?
 		(parts+=MessagePart)+
 
 		(versions+=MessageVersion)*
@@ -406,6 +467,7 @@ Environment:
 		('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*		
 		(servers+=Server)*
 		('naming' '<'factory=QualifiedName ',' provider=STRING'>')?
 		('jms' '<'connectionFactory=QualifiedName ',' targetAddress=QualifiedName'>')?
@@ -445,6 +507,8 @@ Server:
 		('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
+		
 		servername=ID
 		bundles+=Bundle*
 		
@@ -464,7 +528,7 @@ ProcessVariable:
 
 
 ProcessActivity:
-	Receive | Reply | Assign | Invoke | Sequence | Flow | Pick | Wait | ProcessExit | 
+	Receive | Reply | Assign | Invoke | Sequence | Flow | Pick | Wait | ProcessExit | State | 
 	ProcessIf | Subprocess | Scope | ProcessThrow | Rethrow | ForEach | Log | DBLookup | Event | Command
 ;
 
@@ -491,6 +555,17 @@ Command:
 	'command' name=ID ('('vars+=[ProcessVariable] (',' vars+=[ProcessVariable] ')')*)? '{'
 		code=STRING
 	'}'
+;
+
+Transition:
+	'>' action=[Receive] '~' state=[State]
+;
+
+State:
+	'state' name=ID ('{' 
+		('##' description=STRING)?
+		(transitions+=Transition)*
+	'}')?
 ;
 
 Validate:
@@ -726,6 +801,8 @@ Process:
 		('##' description=STRING)?
 		(issues+=Issue)*
 		('assumption' assumptions+=STRING)*
+		('note' notes+=STRING)*
+		
 		(isSuppressJoinFailure?='suppressJoinFailure') ?
 		(serviceReferences+=ServiceReference)*
 		(variables+=ProcessVariable)+
