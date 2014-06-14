@@ -7,4 +7,8 @@ Our emphasis is on delivering an orchestration capability that everyone can use.
 
 More information can be found on the web site: http://chorusjs.com
 
+Tell us what you think: http://www.chorusjs.com/feedback/
+
+If you have any question, feel free to contact us: http://www.chorusjs.com/about/
+
 This project was initiated by Jean-Jacques Dubray, Convergence Modeling LLC | Bellevue WA
